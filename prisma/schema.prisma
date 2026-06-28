@@ -1,1 +1,170 @@
+// prisma/schema.prisma
+// SIPS Web — Skema Database PostgreSQL
 
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  password  String?
+  role      Role     @default(OPERATOR)
+  jabatan   String?
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  surat     Surat[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+// ─── PERSONEL ────────────────────────────────────────────────────────────────
+
+model PersonelDPRD {
+  id        String       @id @default(cuid())
+  nama      String
+  jabatan   String
+  kategori  KategoriDPRD
+  aktif     Boolean      @default(true)
+  urutan    Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([kategori])
+  @@index([aktif])
+  @@map("personel_dprd")
+}
+
+model PersonelASN {
+  id        String   @id @default(cuid())
+  nama      String
+  nip       String   @unique
+  pangkat   String
+  jabatan   String
+  aktif     Boolean  @default(true)
+  urutan    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("personel_asn")
+}
+
+enum KategoriDPRD {
+  PIMPINAN_DPRD
+  KOMISI_I
+  KOMISI_II
+  KOMISI_III
+  CUSTOM
+}
+
+// ─── SURAT ───────────────────────────────────────────────────────────────────
+
+model Surat {
+  id                 String      @id @default(cuid())
+  jenisSurat         JenisSurat
+  nomorSurat         String
+  nomorSuratAsn      String?
+  nomorSPD           String?
+  nomorSPDAsn        String?
+  nomorPemberitahuan String?
+  nomorPemberitahuanAsn String?
+
+  // Konten
+  dasarSuratTugas  String?  @db.Text
+  materi           String?  @db.Text
+  jenisPerjalanan  String?
+  tanggalMulai     DateTime
+  tanggalSelesai   DateTime
+  kotaTujuan       String[]
+  modeDPRD         Boolean  @default(true)
+
+  // Penandatangan
+  jabatanTtd String
+  namaTtd    String
+
+  // Pelaksana (snapshot JSON saat surat dibuat)
+  pelaksanaDPRD Json @default("[]")
+  pelaksanaASN  Json @default("[]")
+
+  // File output
+  fileUrl  String?
+  fileName String?
+  fileSize Int?
+
+  // Meta
+  status    StatusSurat @default(DRAFT)
+  createdBy String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user User @relation(fields: [createdBy], references: [id])
+
+  @@index([jenisSurat, createdAt(sort: Desc)])
+  @@index([createdBy])
+  @@index([nomorSurat])
+  @@map("surat")
+}
+
+enum JenisSurat {
+  PERJALANAN_DINAS_DPRD
+  PERJALANAN_DINAS_ASN
+  PERJALANAN_DINAS_GABUNGAN
+  UNDANGAN_PARIPURNA
+  UNDANGAN_BIASA
+}
+
+enum StatusSurat {
+  DRAFT
+  GENERATED
+  SIGNED
+  ARCHIVED
+}
+
+// ─── KONFIGURASI NOMOR ───────────────────────────────────────────────────────
+
+model KonfigurasiNomor {
+  id        String   @id @default(cuid())
+  jenis     String   @unique
+  prefix    String
+  tahun     Int
+  counter   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("konfigurasi_nomor")
+}
+
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  resource   String
+  resourceId String?
+  detail     Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
